@@ -287,4 +287,22 @@
             </xpath>
         </field>
     </record>
+
+    <!-- Tổng tiền trước / sau thuế của dòng YCMH là số tự tính (SL × đơn giá) — không ai sửa tay. Trên DB có view
+         ngoài code (Studio) ghi readonly="False" lên 2 cột này và được áp sau view module; priority 1000 kế thừa
+         thẳng view gốc để view này áp cuối cùng (bin/check_pr_total_readonly_override.py kiểm). -->
+    <record id="view_purchase_request_form_lock_line_totals" model="ir.ui.view">
+        <field name="name">purchase.request.form.lock.line.totals</field>
+        <field name="model">purchase.request</field>
+        <field name="inherit_id" ref="purchase_request.view_purchase_request_form"/>
+        <field name="priority">1000</field>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='line_ids']/list/field[@name='misa_price_before_tax_total']" position="attributes">
+                <attribute name="readonly">1</attribute>
+            </xpath>
+            <xpath expr="//field[@name='line_ids']/list/field[@name='misa_price_after_tax_total']" position="attributes">
+                <attribute name="readonly">1</attribute>
+            </xpath>
+        </field>
+    </record>
 </odoo>

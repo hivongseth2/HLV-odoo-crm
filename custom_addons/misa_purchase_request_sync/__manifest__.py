@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "MISA Purchase Request Sync",
-    "version": "18.0.1.4.2",
+    "version": "18.0.1.4.3",
     "summary": "API endpoints + button to sync Purchase Request from MISA CRM Browser Extension",
     "description": """
 Module cung cấp:

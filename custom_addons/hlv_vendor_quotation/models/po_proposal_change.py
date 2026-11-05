@@ -7,6 +7,7 @@ thành MỘT phiên bản (hlv.po.revision, có bản chụp trước / sau; NCC
 - tăng SL: kho chưa nhận gì thì cộng thẳng vào dòng cũ (một dòng, giá mới cho cả dòng); đã nhận một phần thì dòng cũ
   giữ SL (đổi giá nếu có) và phần thêm là DÒNG MỚI cùng đơn — đều nối vào dòng YCMH cũ;
 - giảm SL: giảm SL dòng cũ (Odoo trừ vào phiếu nhập đang mở — hlv_purchase_qty_decrease), YCMH giảm theo;
+- SL 0 = không mua nữa: dòng về SL 0 (giữ dòng như đổi mã), YCMH / phiếu trả phần đó; không cần NCC báo giá;
 - đổi mã: dòng mã cũ về SL 0 (giữ dòng để còn lịch sử — Odoo không cho xoá dòng đơn đã xác nhận), mã mới là dòng mới +
   dòng YCMH mới trên cùng YCMH.
 Phiếu hỏi giá đổi theo (SL mua của NCC, SL cần mua) để bảng so giá khớp với đơn mua.
@@ -17,13 +18,18 @@ hỏi NCC thì giữ giá chưa VAT, chỉ đổi thuế (giá sau VAT đổi th
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
-from .price_proposal_utils import same_money, vat_label, vat_rate
+from .price_proposal_utils import same_money, vat_code, vat_label, vat_rate
 from .purchase_order_line_price import PRICE_WRITE_CTX
 from .purchase_order_revision import tax_rate_of
 from .vendor_quote_line import VAT_SELECTION
 from .vendor_quote_utils import format_vn_number, split_unit_price
 
 QTY_EPS = 1e-6
+
+
+def vat_code_of(order_line):
+    """Mã VAT của thuế đang có trên dòng đơn mua ("" khi mức đó không có mã) — điền sẵn ô VAT cho thu mua / sale."""
+    return vat_code(tax_rate_of(order_line), bool(order_line.taxes_id), dict(VAT_SELECTION))
 
 
 class PriceProposalLineChange(models.Model):
@@ -34,6 +40,9 @@ class PriceProposalLineChange(models.Model):
     suggested_qty = fields.Float(string="SL thu mua đề xuất", digits="Product Unit of Measure", readonly=True,
                                  help="0 = thu mua không đổi số lượng.")
     suggested_product_id = fields.Many2one("product.product", string="Mã thu mua đề xuất", readonly=True)
+    # SL 0 = không mua nữa — cờ riêng vì suggested_qty / new_qty = 0 vốn nghĩa là "giữ SL".
+    suggested_drop = fields.Boolean(string="Thu mua đề xuất không mua nữa", readonly=True)
+    new_drop = fields.Boolean(string="Không mua nữa", readonly=True)
     # Cái sale chốt gửi đi (sửa lại từ đề xuất của thu mua): 0 / trống = giữ như trên đơn.
     new_qty = fields.Float(string="SL mới", digits="Product Unit of Measure", readonly=True)
     new_product_id = fields.Many2one("product.product", string="Mã mới", readonly=True)
@@ -52,13 +61,13 @@ class PriceProposalLineChange(models.Model):
         return self.new_product_id or self.product_id
 
     def _target_qty(self):
-        return self.new_qty or self.old_qty
+        return 0.0 if self.new_drop else (self.new_qty or self.old_qty)
 
     def _product_changed(self):
         return bool(self.new_product_id) and self.new_product_id != self.product_id
 
     def _qty_changed(self):
-        return bool(self.new_qty) and abs(self.new_qty - self.old_qty) > QTY_EPS
+        return self.new_drop or (bool(self.new_qty) and abs(self.new_qty - self.old_qty) > QTY_EPS)
 
     def _vat_changed(self):
         return bool(self.new_vat) and abs(vat_rate(self.new_vat) - self.tax_rate) > QTY_EPS
@@ -76,7 +85,10 @@ class PriceProposalLineChange(models.Model):
         parts = []
         if self._product_changed():
             parts.append(_("mã %(old)s → %(new)s", old=self.product_id.display_name, new=self.new_product_id.display_name))
-        if self._qty_changed():
+        if self.new_drop:
+            parts.append(_("SL %(old)s → 0 %(uom)s (không mua nữa)", old=format_vn_number(self.old_qty),
+                           uom=self.uom_id.name or ""))
+        elif self._qty_changed():
             parts.append(_("SL %(old)s → %(new)s %(uom)s", old=format_vn_number(self.old_qty),
                            new=format_vn_number(self.new_qty), uom=self.uom_id.name or ""))
         if self._vat_changed():
@@ -86,21 +98,25 @@ class PriceProposalLineChange(models.Model):
     # ------------------------------------------------------------------ sale chốt SL / mã
     def _set_line_target(self, qty, product, vat=""):
         """Sale chốt SL / mã / VAT sẽ hỏi NCC hoặc gửi duyệt (sửa lại đề xuất của thu mua nếu cần). product rỗng = giữ mã,
-        vat rỗng = giữ VAT trên đơn.
-        Lỗi: SL ≤ 0; giảm dưới SL kho đã nhận; đổi mã khi kho đã nhận mã cũ."""
+        vat rỗng = giữ VAT trên đơn. qty 0 = không mua nữa.
+        Lỗi: SL âm; SL 0 kèm đổi mã; giảm dưới SL kho đã nhận; đổi mã khi kho đã nhận mã cũ."""
         self.ensure_one()
         po_line = self.order_line_id.sudo()
         product = product or self.product_id
-        if qty <= QTY_EPS:
-            raise UserError(_("Nhập số lượng lớn hơn 0."))
+        drop = qty <= QTY_EPS
+        if qty < -QTY_EPS:
+            raise UserError(_("Số lượng không được âm."))
         changed = product != self.product_id
+        if drop and changed:
+            raise UserError(_("Đổi mã thì nhập số lượng mua mã mới (lớn hơn 0)."))
         if changed and po_line.qty_received:
             raise UserError(_("%(product)s đã nhận kho %(qty)s — không đổi mã được nữa, chỉ đổi giá / số lượng.",
                               product=self.product_id.display_name, qty=format_vn_number(po_line.qty_received)))
         if not changed and qty < po_line.qty_received - QTY_EPS:
             raise UserError(_("Kho đã nhận %s — không giảm dưới số đó.", format_vn_number(po_line.qty_received)))
         self.sudo().write({
-            "new_qty": qty if abs(qty - self.old_qty) > QTY_EPS else 0.0,
+            "new_qty": qty if not drop and abs(qty - self.old_qty) > QTY_EPS else 0.0,
+            "new_drop": drop,
             "new_product_id": product.id if changed else False,
             "new_vat": vat if vat and abs(vat_rate(vat) - self.tax_rate) > QTY_EPS else False,
         })

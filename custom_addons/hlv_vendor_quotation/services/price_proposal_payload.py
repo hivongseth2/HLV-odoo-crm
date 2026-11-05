@@ -5,6 +5,7 @@
 """
 
 from ..models.po_price_proposal import KEEP_FROM, PROPOSAL_STATES, REQUOTE_FROM, SALE_TODO_STATES
+from ..models.po_proposal_change import vat_code_of
 from ..models.vendor_quote_utils import DATETIME_FMT, local_date_text
 
 STATE_LABELS = dict(PROPOSAL_STATES)
@@ -41,6 +42,15 @@ def vat_options(company):
     """[{code, label}] mức VAT chọn được trong popup / kiểm ở API — chỉ mức company đã khai thuế mua."""
     options = company.env["hlv.vendor.quote.line"]._hlv_vat_options(company)
     return [{"code": code, "label": label} for code, label in options]
+
+
+def _form_qty(proposal):
+    """SL điền sẵn trong popup: cái sale chốt (0 = không mua nữa), chưa có thì của thu mua, chưa có nữa thì SL trên đơn."""
+    if proposal.new_drop:
+        return 0.0
+    if proposal.new_qty:
+        return proposal.new_qty
+    return 0.0 if proposal.suggested_drop else (proposal.suggested_qty or proposal.old_qty)
 
 
 def _product(product):
@@ -82,16 +92,19 @@ def _proposal(proposal):
         "uom": proposal.uom_id.name or "",
         "old_qty": proposal.old_qty,
         "suggested_qty": proposal.suggested_qty,
+        "suggested_drop": proposal.suggested_drop,
         "suggested_product": _product(proposal.suggested_product_id),
         "new_qty": proposal.new_qty,
+        "new_drop": proposal.new_drop,
         "new_product": _product(proposal.new_product_id),
-        "form_qty": proposal.new_qty or proposal.suggested_qty or proposal.old_qty,
+        "form_qty": _form_qty(proposal),
         "form_product": _product(proposal.new_product_id or proposal.suggested_product_id or proposal.product_id),
         "change_text": proposal._change_text() if proposal._has_line_change() else "",
         "needs_vendor": proposal.needs_vendor,
-        # VAT: mã thu mua đề xuất / sale chốt (rỗng = giữ VAT trên đơn); form điền sẵn cái sale chốt, chưa có thì của thu mua.
+        # VAT: mã thu mua đề xuất / sale chốt (rỗng = giữ VAT trên đơn); form điền sẵn cái sale chốt, chưa có thì của thu
+        # mua, chưa có nữa thì VAT đang trên đơn.
         "suggested_vat": proposal.suggested_vat or "",
-        "form_vat": proposal.new_vat or proposal.suggested_vat or "",
+        "form_vat": proposal.new_vat or proposal.suggested_vat or vat_code_of(proposal.order_line_id.sudo()),
         "vat_options": vat_options(proposal.purchase_order_id.company_id),
         "qty_received": proposal.order_line_id.sudo().qty_received,
         "can_requote": proposal.state in REQUOTE_FROM and bool(proposal.quote_line_id),

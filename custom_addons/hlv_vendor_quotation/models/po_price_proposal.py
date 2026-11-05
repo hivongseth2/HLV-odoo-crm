@@ -81,7 +81,8 @@ class PurchaseOrderPriceProposal(models.Model):
         help="NCC đã gửi lại báo giá nhưng giá sau VAT không đổi so với giá trên đơn — không có gì để thu mua duyệt.",
     )
 
-    @api.depends("vendor_date", "vendor_price_incl", "old_price_incl", "new_qty", "new_product_id", "new_vat")
+    @api.depends("vendor_date", "vendor_price_incl", "old_price_incl", "new_qty", "new_drop", "new_product_id",
+                 "new_vat")
     def _compute_vendor_kept_price(self):
         # Đổi SL / mã thì giá bằng giá cũ vẫn là thay đổi cần duyệt — không phải "giữ giá".
         for proposal in self:
@@ -144,24 +145,32 @@ class PurchaseOrderPriceProposal(models.Model):
         return quote_line
 
     @api.model
-    def _buyer_propose(self, po_line, suggested_incl, note, qty=0.0, product=None, vat=""):
-        """Thu mua gửi đề xuất: giá gợi ý (sau VAT, 0 = không gợi ý), SL mới (0 = giữ), mã thay thế (rỗng = giữ), mã VAT
-        (rỗng = giữ) + lý do (bắt buộc — có thể chỉ có lý do). Trả đề xuất vừa tạo; báo sale trên trang hỏi giá."""
+    def _buyer_propose(self, po_line, suggested_incl, note, qty=None, product=None, vat=""):
+        """Thu mua gửi đề xuất: giá gợi ý (sau VAT, 0 / bằng giá trên đơn = không gợi ý), SL mới (None / bằng SL trên đơn
+        = giữ, 0 = không mua nữa), mã thay thế (rỗng = giữ), mã VAT (rỗng / bằng VAT trên đơn = giữ) + lý do (bắt buộc —
+        có thể chỉ có lý do). Trả đề xuất vừa tạo; báo sale trên trang hỏi giá."""
         quote_line = self._check_can_propose(po_line)
-        if suggested_incl < 0 or qty < 0:
+        if suggested_incl < 0 or (qty or 0.0) < 0:
             raise UserError(_("Giá gợi ý / số lượng không được âm."))
+        drop = qty is not None and qty <= 1e-6
         note = (note or "").strip()
         if not note:
             raise UserError(_("Ghi lý do để sale biết cần hỏi lại NCC điều gì (VD giá thị trường, mua thêm, đổi mã)."))
         if product == po_line.product_id:
             product = None
+        if drop and product:
+            raise UserError(_("Không mua nữa thì không đổi mã — đổi mã thì ghi SL mua mã mới."))
         tax = tax_rate_of(po_line)
+        old_incl = price_incl_vat(po_line.price_unit, tax)
+        if same_money(suggested_incl, old_incl):
+            suggested_incl = 0.0
         proposal = self.sudo().create({
             "purchase_order_id": po_line.order_id.id, "order_line_id": po_line.id, "quote_line_id": quote_line.id,
             "inquiry_id": quote_line.inquiry_line_id.inquiry_id.id, "tax_rate": tax,
-            "old_price_incl": price_incl_vat(po_line.price_unit, tax), "suggested_price_incl": suggested_incl,
+            "old_price_incl": old_incl, "suggested_price_incl": suggested_incl,
             "buyer_note": note, "buyer_id": self.env.uid, "old_qty": po_line.product_qty,
-            "suggested_qty": qty if abs(qty - po_line.product_qty) > 1e-6 else 0.0,
+            "suggested_qty": qty if qty and not drop and abs(qty - po_line.product_qty) > 1e-6 else 0.0,
+            "suggested_drop": drop,
             "suggested_product_id": product.id if product else False,
             "suggested_vat": vat if vat and abs(vat_rate(vat) - tax) > 1e-6 else False,
         })
@@ -185,7 +194,8 @@ class PurchaseOrderPriceProposal(models.Model):
         self._check_state(REQUOTE_FROM, _("gửi"))
         self._set_line_target(qty, product, vat)
         note = (note or "").strip()
-        if not needs_vendor and not self._product_changed():
+        # Không mua nữa: không có gì cho NCC báo giá — gửi thẳng thu mua (NCC được báo khi duyệt).
+        if (not needs_vendor or self.new_drop) and not self._product_changed():
             if not self._has_line_change():
                 raise UserError(_("Không đổi số lượng / mã / VAT thì phải hỏi NCC giá mới (hoặc bấm \"NCC giữ giá\")."))
             self._close_requote()
@@ -357,7 +367,9 @@ class PurchaseOrderPriceProposal(models.Model):
         parts = []
         if self.suggested_price_incl:
             parts.append(_("gợi ý giá %s", money_text(self.suggested_price_incl)))
-        if self.suggested_qty:
+        if self.suggested_drop:
+            parts.append(_("không mua nữa (SL %s → 0)", format_vn_number(self.old_qty)))
+        elif self.suggested_qty:
             parts.append(_("SL %(old)s → %(new)s", old=format_vn_number(self.old_qty),
                            new=format_vn_number(self.suggested_qty)))
         if self.suggested_product_id:

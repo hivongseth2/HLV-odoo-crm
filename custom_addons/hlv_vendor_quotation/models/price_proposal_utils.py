@@ -19,6 +19,15 @@ def vat_rate(vat):
     return 0.0 if vat == "kct" else float(vat)
 
 
+def vat_code(rate, taxed, codes):
+    """Mã VAT (trong codes — mã của VAT_SELECTION) ứng với thuế đang có trên dòng đơn mua, để điền sẵn ô VAT.
+    taxed False (dòng không có thuế nào) → "kct"; rate 10.0 → "10"; mức không có mã (VD 7%) → "" (để trống)."""
+    if not taxed:
+        return "kct"
+    code = format(rate or 0.0, "g")
+    return code if code in codes else ""
+
+
 def vat_label(vat):
     """Chữ hiện cho mã VAT: "10" → "10%", "kct" → "không chịu thuế", trống → ""."""
     if not vat:

@@ -146,7 +146,8 @@ window.HlvQuote = window.HlvQuote || {};
 
   /** SL / mã thu mua đề xuất (sale chưa chốt) — "SL 1 → 2 Cái · mã X"; "" khi thu mua chỉ ghi giá / lý do. */
   function buyerWish(p) {
-    return [p.suggested_qty ? "SL " + HQ.qty(p.old_qty) + " → " + HQ.qty(p.suggested_qty) + " " + esc(p.uom) : "",
+    return [p.suggested_drop ? "không mua nữa (SL " + HQ.qty(p.old_qty) + " → 0)"
+      : p.suggested_qty ? "SL " + HQ.qty(p.old_qty) + " → " + HQ.qty(p.suggested_qty) + " " + esc(p.uom) : "",
       p.suggested_product ? "mã " + esc(p.suggested_product.name) : "",
       p.suggested_vat ? "VAT " + pct(p.tax_rate) + " → " + (p.suggested_vat === "kct" ? "KCT" : p.suggested_vat + "%") : ""]
       .filter(Boolean).join(" · ");
