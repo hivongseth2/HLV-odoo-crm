@@ -1,7 +1,7 @@
 /* Popup "Xử lý tất cả" các món thu mua trả về của phiếu (sale_price_proposal.js): mỗi món một hàng, điền sẵn như popup
    một món (sale_price_proposal_form.js — dùng chung quy tắc HQ.ppRules): NCC đã báo mới → gửi thu mua duyệt; chưa báo
-   → hỏi lại NCC / gửi thẳng thu mua (SL, giá trước / sau VAT, VAT, có cần NCC báo giá lại); NCC giữ nguyên giá →
-   giữ giá.
+   → "Hỏi lại NCC" hoặc "Gửi thẳng thu mua duyệt" (không hỏi NCC) với SL, giá trước / sau VAT, VAT — chọn sẵn theo
+   ppRules.vendorDefault và tự đổi theo cái sale sửa cho tới khi sale tự chọn; NCC giữ nguyên giá → giữ giá.
    Sale sửa hàng nào cần rồi bấm gửi MỘT lần (API price_bulk — một món lỗi thì không món nào được ghi). Đổi sang mã khác
    mã thu mua đề xuất thì dùng nút "Hỏi lại NCC" trên ô (popup một món có ô tìm mã). Khung popup: #hq-ppb-modal. */
 window.HlvQuote = window.HlvQuote || {};
@@ -12,6 +12,8 @@ window.HlvQuote = window.HlvQuote || {};
   var esc = HQ.esc;
   var EPS = 1e-9;
   var SKIP = "skip";
+  // Hai việc của món chưa có giá NCC: hỏi lại NCC / gửi thẳng thu mua — cùng API "requote", khác needs_vendor.
+  var REQUOTE = { vendor: true, direct: true };
   // Đề xuất trong popup, theo id.
   var B = { byId: {} };
 
@@ -19,7 +21,8 @@ window.HlvQuote = window.HlvQuote || {};
     return HQ.$("hq-ppb-" + id);
   }
 
-  /** Việc mặc định của một món: NCC đã báo giá mới → gửi duyệt; NCC giữ nguyên giá → giữ giá; còn lại hỏi lại NCC. */
+  /** Việc mặc định của một món: NCC đã báo giá mới → gửi duyệt; NCC giữ nguyên giá → giữ giá; còn lại hỏi lại NCC
+      (refreshRow đổi sang gửi thẳng thu mua theo ppRules.vendorDefault). */
   function defaultAction(p) {
     if (p.can_submit) {
       return "submit";
@@ -27,7 +30,7 @@ window.HlvQuote = window.HlvQuote || {};
     if (p.vendor_kept_price && p.can_keep) {
       return "keep";
     }
-    return p.can_requote ? "requote" : p.can_keep ? "keep" : SKIP;
+    return p.can_requote ? "vendor" : p.can_keep ? "keep" : SKIP;
   }
 
   function actionSelect(p) {
@@ -36,7 +39,8 @@ window.HlvQuote = window.HlvQuote || {};
       options.push(["submit", "Gửi thu mua duyệt — NCC báo " + HQ.money(p.vendor_price)]);
     }
     if (p.can_requote) {
-      options.push(["requote", p.can_submit ? "Hỏi lại NCC lần nữa" : "Hỏi lại NCC / gửi thẳng thu mua"]);
+      options.push(["vendor", p.can_submit ? "Hỏi lại NCC lần nữa" : "Hỏi lại NCC"]);
+      options.push(["direct", "Gửi thẳng thu mua duyệt (không hỏi NCC)"]);
     }
     if (p.can_keep) {
       options.push(["keep", "NCC giữ giá — đơn giữ nguyên"]);
@@ -54,13 +58,12 @@ window.HlvQuote = window.HlvQuote || {};
     var swapped = !!product.id && product.id !== p.product_id;
     return '<div class="hq-ppb-requote" data-ppb-requote>' +
       (swapped ? '<div class="hq-pp-diff">Đổi sang mã ' + esc(product.name) + "</div>" : "") +
-      HQ.ppRules.lineFields(p) +
-      '<label class="hq-pp-check"><input type="checkbox" data-ppb-vendor/> Cần NCC báo giá lại</label>' +
-      '<div class="hq-pp-outcome" data-ppb-outcome></div></div>';
+      HQ.ppRules.lineFields(p) + '<div class="hq-pp-outcome" data-ppb-outcome></div></div>';
   }
 
   /** Một món = một thẻ: số thứ tự + ảnh + tên đậm ở đầu để nhìn là biết thẻ nào của món nào. */
   function row(p, index) {
+    // Giá / VAT / SL cũ đã nằm ở nhãn các ô bên dưới — dòng đầu chỉ còn lý do của thu mua (+ NCC đã báo gì).
     var wish = [p.buyer_note ? "Lý do: " + esc(p.buyer_note) : "",
       p.vendor_price && !p.vendor_kept_price ? "NCC báo lại <b>" + HQ.money(p.vendor_price) + "</b>" : "",
       p.vendor_kept_price ? "NCC giữ nguyên giá" : ""].filter(Boolean).join(" · ");
@@ -68,7 +71,7 @@ window.HlvQuote = window.HlvQuote || {};
       '<img class="hq-ppb-img" src="' + esc(p.image) + '" alt="" loading="lazy"/>' +
       '<div class="hq-ppb-main"><div class="hq-ppb-head"><span class="hq-ppb-no">' + (index + 1) + "</span><b>" +
       esc(p.product) + "</b>" + HQ.docChip(p.order) + "</div>" +
-      '<div class="hq-muted">' + HQ.ppRules.oldText(p) + (wish ? " · " + wish : "") + "</div>" +
+      (wish ? '<div class="hq-muted">' + wish + "</div>" : "") +
       actionSelect(p) + (p.can_requote ? requoteFields(p) : "") +
       '<input type="text" class="hq-input" data-ppb-note maxlength="1000" placeholder="Ghi chú (không bắt buộc)"/>' +
       "</div></div>";
@@ -80,30 +83,29 @@ window.HlvQuote = window.HlvQuote || {};
     return !!product.id && product.id !== p.product_id;
   }
 
-  /** Vẽ lại một hàng sau khi sửa: ẩn / hiện phần hỏi lại, ô "Cần NCC báo giá lại" (giữ lựa chọn sale đã bấm), câu
-      "Duyệt xong: …". Trả false khi hàng chưa gửi được (SL trống / đổi mã mà SL 0). */
+  /** Vẽ lại một hàng sau khi sửa: ẩn / hiện phần hỏi lại, chọn "Hỏi lại NCC" / "Gửi thẳng thu mua" theo
+      ppRules.vendorDefault (đổi mã luôn hỏi NCC, SL 0 luôn gửi thẳng; còn lại chỉ tự đổi khi sale chưa tự chọn việc),
+      câu "Duyệt xong: …". Trả false khi hàng chưa gửi được (SL trống / đổi mã mà SL 0). */
   function refreshRow(rowEl) {
     var p = B.byId[rowEl.dataset.ppbId];
-    var action = rowEl.querySelector("[data-ppb-action]").value;
+    var select = rowEl.querySelector("[data-ppb-action]");
     var box = rowEl.querySelector("[data-ppb-requote]");
-    rowEl.classList.toggle("is-skip", action === SKIP);
+    rowEl.classList.toggle("is-skip", select.value === SKIP);
     if (!box) {
       return true;
     }
-    box.classList.toggle("hq-hidden", action !== "requote");
-    if (action !== "requote") {
+    box.classList.toggle("hq-hidden", !REQUOTE[select.value]);
+    if (!REQUOTE[select.value]) {
       return true;
     }
     var v = HQ.ppRules.refreshLine(box.querySelector("[data-pp-line]"), p);
     var swap = swapped(p);
-    var vendor = box.querySelector("[data-ppb-vendor]");
     var def = HQ.ppRules.vendorDefault(p, v.qty, v.rate, v.price, swap);
-    vendor.disabled = def.disabled;
-    if (def.disabled || !vendor.dataset.touched) {
-      vendor.checked = def.checked;
+    if (def.disabled || !select.dataset.touched) {
+      select.value = def.checked ? "vendor" : "direct";
     }
     box.querySelector("[data-ppb-outcome]").textContent = HQ.ppRules.outcome(p, p.form_product || {}, v.qty, swap) +
-      HQ.ppRules.vatOutcome(p, v.rate, vendor.checked) + (vendor.checked ? " Hỏi NCC." : " Gửi thẳng thu mua.");
+      HQ.ppRules.vatOutcome(p, v.rate, select.value === "vendor");
     return v.qty >= 0 && !(v.qty < EPS && swap);
   }
 
@@ -119,14 +121,15 @@ window.HlvQuote = window.HlvQuote || {};
     var p = B.byId[rowEl.dataset.ppbId];
     var action = rowEl.querySelector("[data-ppb-action]").value;
     var data = { proposal_id: p.id, action: action, note: rowEl.querySelector("[data-ppb-note]").value };
-    if (action === "requote") {
+    if (REQUOTE[action]) {
+      data.action = "requote";
       var box = rowEl.querySelector("[data-ppb-requote]");
       var v = HQ.ppRules.refreshLine(box.querySelector("[data-pp-line]"), p);
       data.qty = v.qty;
       data.price = v.price;
       data.vat = v.vat;
       data.product_id = (p.form_product || {}).id || null;
-      data.needs_vendor = box.querySelector("[data-ppb-vendor]").checked;
+      data.needs_vendor = action === "vendor";
     }
     return data;
   }
@@ -152,9 +155,8 @@ window.HlvQuote = window.HlvQuote || {};
     });
     HQ.on(modal, "click", "[data-ppb-close]", close);
     HQ.ppRules.bindLine(modal, refreshAll);
-    HQ.on(modal, "change", "[data-ppb-action]", refreshAll);
-    HQ.on(modal, "change", "[data-ppb-vendor]", function (input) {
-      input.dataset.touched = "1";
+    HQ.on(modal, "change", "[data-ppb-action]", function (select) {
+      select.dataset.touched = "1";  // sale tự chọn việc — thôi tự đổi hỏi NCC / gửi thẳng
       refreshAll();
     });
     HQ.on(modal, "click", "#hq-ppb-send", function (button) {

@@ -4,7 +4,7 @@
    sale bật lại được; SL 0 = không mua nữa, luôn gửi thẳng thu mua. Dòng "Duyệt xong: …" nói trước đơn mua sẽ đổi thế
    nào. Khung popup nằm sẵn trong trang (#hq-pp-modal, sale_page_templates.xml).
    Bộ ô SL / giá trước VAT / VAT / giá sau VAT (lineFields) dùng chung với popup "Xử lý tất cả" (sale_price_proposal_bulk.js):
-   gõ giá ô nào thì ô kia tự tính theo VAT; ô khác với đơn thì tô màu + nhãn "cũ → mới". */
+   gõ giá ô nào thì ô kia tự tính theo VAT; nhãn mỗi ô ghi giá trị cũ trên đơn, ô khác với đơn thì tô màu. */
 window.HlvQuote = window.HlvQuote || {};
 
 (function (HQ) {
@@ -100,22 +100,20 @@ window.HlvQuote = window.HlvQuote || {};
     label.parentNode.classList.toggle("is-changed", changed);
   }
 
-  /** Nhãn + màu của bộ ô theo cái đang nhập: ô khác với đơn thì tô màu, nhãn "cũ → mới". Trả readLine. */
+  /** Nhãn + màu của bộ ô theo cái đang nhập: nhãn luôn kèm giá trị cũ trên đơn ("cũ 8%"), ô khác với đơn thì tô
+      màu (CSS .is-changed). Trả readLine. */
   function refreshLine(box, p) {
     var v = readLine(box);
     var rate = v.rate === null ? p.tax_rate : v.rate;
-    var qtyChanged = v.qty >= 0 && Math.abs(v.qty - p.old_qty) > EPS;
-    var vatChanged = Math.abs(rate - p.tax_rate) > EPS;
     var priceChanged = v.price > 0 && Math.abs(v.price - p.old_price) >= 1;
-    var diff = function (label, from, to) {
-      return label + ' <b class="hq-pp-diff">' + from + " → " + to + "</b>";
+    var old = function (text) {
+      return ' <span class="hq-pp-old">cũ ' + text + "</span>";
     };
-    var uom = "SL (" + esc(p.uom) + ")";
-    setField(box, "qty", qtyChanged, qtyChanged ? diff(uom, HQ.qty(p.old_qty), HQ.qty(v.qty)) : uom);
-    setField(box, "vat", vatChanged, vatChanged ? diff("VAT", pct(p.tax_rate), pct(rate)) : "VAT");
-    setField(box, "net", priceChanged, "Giá trước VAT");
-    setField(box, "gross", priceChanged, priceChanged
-      ? 'Giá sau VAT <b class="hq-pp-diff">cũ ' + HQ.money(p.old_price) + "</b>" : "Giá sau VAT");
+    setField(box, "qty", v.qty >= 0 && Math.abs(v.qty - p.old_qty) > EPS,
+      "SL (" + esc(p.uom) + ")" + old(HQ.qty(p.old_qty)));
+    setField(box, "net", priceChanged, "Giá trước VAT" + old(HQ.money(p.old_price / (1 + p.tax_rate / 100))));
+    setField(box, "vat", Math.abs(rate - p.tax_rate) > EPS, "VAT" + old(pct(p.tax_rate)));
+    setField(box, "gross", priceChanged, "Giá sau VAT" + old(HQ.money(p.old_price)));
     return v;
   }
 
@@ -193,22 +191,15 @@ window.HlvQuote = window.HlvQuote || {};
     return { checked: !(directOnly && !price), disabled: false };
   }
 
-  /** Dòng đầu: giá cũ (sau VAT) · VAT · SL trên đơn. */
-  function oldText(p) {
-    return "Giá cũ <b>" + HQ.money(p.old_price) + "</b> sau VAT · VAT " + pct(p.tax_rate) + " · SL " + HQ.qty(p.old_qty) +
-      " " + esc(p.uom);
-  }
-
   // Popup xử lý nhiều món (sale_price_proposal_bulk.js) dùng đúng các quy tắc này.
   HQ.ppRules = {
     outcome: outcome, vatOutcome: vatOutcome, vendorDefault: vendorDefault, lineFields: lineFields,
-    refreshLine: refreshLine, bindLine: bindLine, oldText: oldText,
+    refreshLine: refreshLine, bindLine: bindLine,
   };
 
   function body(p) {
     var product = p.form_product || {};
-    return '<div class="hq-muted">' + oldText(p) + "</div>" +
-      '<div class="hq-pp-field"><label class="hq-label" for="hq-pp-prod">Mã hàng</label>' +
+    return '<div class="hq-pp-field"><label class="hq-label" for="hq-pp-prod">Mã hàng</label>' +
       '<div class="hq-picker"><input type="text" class="hq-input" id="hq-pp-prod" autocomplete="off" value="' +
       esc(product.name || "") + '" placeholder="Gõ mã / tên để đổi sang mã khác"/>' +
       '<div class="hq-dropdown hq-hidden" id="hq-pp-prod-list"></div></div></div>' + lineFields(p) +
