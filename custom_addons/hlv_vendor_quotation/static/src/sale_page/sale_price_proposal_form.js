@@ -76,40 +76,8 @@ window.HlvQuote = window.HlvQuote || {};
   function readLine(box) {
     var raw = box.querySelector("[data-pp-qty]").value.trim();
     var code = box.querySelector("[data-pp-vat]").value;
-    var gross = box.querySelector("[data-pp-gross]");
-    // Ô giá bị khoá (gửi thẳng, cài đặt "block") = không đổi giá: gửi 0 để máy chủ giữ giá chưa VAT.
     return { qty: raw === "" ? NaN : Number(raw), vat: code, rate: vatRate(code),
-             price: gross.readOnly ? 0 : HQ.parseVnNumber(gross.value) || 0 };
-  }
-
-  /** Cài đặt "Đổi giá thì phải hỏi NCC" (direct_price_mode "block"): gửi thẳng thu mua thì khoá hai ô giá về giá cũ
-      (giá chưa VAT cũ, giá sau VAT tính theo VAT đang chọn); hỏi lại NCC thì mở ra, điền lại giá thu mua gợi ý. Trả
-      true khi vừa đổi trạng thái khoá (người gọi đọc lại bộ ô). */
-  function lockPrice(box, p, direct) {
-    var locked = direct && p.direct_price_mode === "block";
-    var net = box.querySelector("[data-pp-net]");
-    var gross = box.querySelector("[data-pp-gross]");
-    if (gross.readOnly === locked) {
-      return false;
-    }
-    [net, gross].forEach(function (input) {
-      input.readOnly = locked;
-      input.title = locked ? "Gửi thẳng thu mua không được đổi giá — muốn đổi giá chọn Hỏi lại NCC" : "";
-    });
-    if (locked) {
-      net.value = HQ.qty(p.old_price / (1 + p.tax_rate / 100));
-      box.dataset.basis = "net";
-    } else {
-      gross.value = p.suggested_price ? HQ.qty(p.suggested_price) : "";
-      box.dataset.basis = "gross";
-    }
-    syncPrice(box, null);
-    return true;
-  }
-
-  /** Câu nhắc khi ô giá đang khoá. */
-  function lockNote(box) {
-    return box.querySelector("[data-pp-gross]").readOnly ? " Muốn đổi giá: chọn Hỏi lại NCC." : "";
+             price: HQ.parseVnNumber(box.querySelector("[data-pp-gross]").value) || 0 };
   }
 
   /** Gõ giá một ô (source) hoặc đổi VAT (source null): tính lại ô giá còn lại theo ô sale gõ sau cùng. */
@@ -230,10 +198,11 @@ window.HlvQuote = window.HlvQuote || {};
     return "Giữ SL " + HQ.qty(p.old_qty) + uom + ".";
   }
 
-  /** Ô "Cần NCC báo giá lại" mặc định: {checked, disabled}. Đổi mã luôn hỏi NCC (mã mới chưa có giá); SL 0 (không mua
-      nữa) không có gì cho NCC báo; chỉ giảm SL / đổi VAT mà không đổi giá thì gửi thẳng thu mua (NCC vẫn được báo khi
-      duyệt); còn lại hỏi NCC. Cài đặt cấm gửi thẳng đổi giá không ép ở đây — lockPrice khoá ô giá khi gửi thẳng. rate:
-      % VAT chọn (null = giữ); price: giá sau VAT trong ô (0 = không ghi). */
+  /** Ô "Cần NCC báo giá lại" mặc định: {checked, disabled, priceLocked}. Đổi mã luôn hỏi NCC (mã mới chưa có giá); SL
+      0 (không mua nữa) không có gì cho NCC báo; giá trong ô (mặc định là giá thu mua đề xuất) khác giá cũ mà cài đặt
+      là "Đổi giá thì phải hỏi NCC" ("block") → bắt hỏi NCC, giữ nguyên giá đề xuất làm giá đề nghị NCC (priceLocked —
+      muốn gửi thẳng thì xoá ô giá); chỉ giảm SL / đổi VAT mà không đổi giá thì gửi thẳng thu mua (NCC vẫn được báo khi
+      duyệt); còn lại hỏi NCC. rate: % VAT chọn (null = giữ); price: giá sau VAT trong ô (0 = không ghi). */
   function vendorDefault(p, qty, rate, price, swapped) {
     if (swapped) {
       return { checked: true, disabled: true };
@@ -242,15 +211,21 @@ window.HlvQuote = window.HlvQuote || {};
       return { checked: false, disabled: true };
     }
     var changed = priceChanged(p, price);
+    if (changed && p.direct_price_mode === "block") {
+      return { checked: true, disabled: true, priceLocked: true };
+    }
     var vatChanged = rate !== null && Math.abs(rate - p.tax_rate) > EPS;
     var directOnly = (qty < p.old_qty - EPS || vatChanged) && qty <= p.old_qty + EPS;
     return { checked: !(directOnly && !changed), disabled: false };
   }
 
+  // Cài đặt "Đổi giá thì phải hỏi NCC": nói vì sao không gửi thẳng được.
+  var BLOCK_NOTE = " Đổi giá thì phải hỏi NCC (cài đặt) — muốn gửi thẳng thu mua thì xoá ô giá.";
+
   // Popup xử lý nhiều món (sale_price_proposal_bulk.js) dùng đúng các quy tắc này.
   HQ.ppRules = {
     outcome: outcome, vatOutcome: vatOutcome, vendorDefault: vendorDefault, lineFields: lineFields,
-    refreshLine: refreshLine, bindLine: bindLine, lockPrice: lockPrice, lockNote: lockNote,
+    refreshLine: refreshLine, bindLine: bindLine, BLOCK_NOTE: BLOCK_NOTE,
   };
 
   function body(p) {
@@ -281,11 +256,8 @@ window.HlvQuote = window.HlvQuote || {};
     if (def.disabled || !F.touched) {
       vendor.checked = def.checked;
     }
-    if (lockPrice(line(), p, !vendor.checked)) {
-      v = refreshLine(line(), p);
-    }
     el("outcome").textContent = outcome(p, product, v.qty, swapped) + vatOutcome(p, v.rate, vendor.checked, v.price) +
-      lockNote(line());
+      (def.priceLocked ? BLOCK_NOTE : "");
     el("send").textContent = vendor.checked ? "Gửi NCC báo giá" : "Gửi thu mua duyệt";
     el("send").disabled = !(v.qty >= 0) || (v.qty < EPS && swapped);
     el("note").placeholder = vendor.checked

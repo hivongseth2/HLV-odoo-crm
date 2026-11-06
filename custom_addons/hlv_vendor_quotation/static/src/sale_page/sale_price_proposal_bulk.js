@@ -99,22 +99,19 @@ window.HlvQuote = window.HlvQuote || {};
     if (!REQUOTE[select.value]) {
       return true;
     }
-    var line = box.querySelector("[data-pp-line]");
-    var v = HQ.ppRules.refreshLine(line, p);
+    var v = HQ.ppRules.refreshLine(box.querySelector("[data-pp-line]"), p);
     var swap = swapped(p);
     var def = HQ.ppRules.vendorDefault(p, v.qty, v.rate, v.price, swap);
     if (def.disabled || !select.dataset.touched) {
       select.value = def.checked ? "vendor" : "direct";
     }
-    // Cài đặt cấm gửi thẳng đổi giá: gửi thẳng thì ô giá khoá về giá cũ.
-    if (HQ.ppRules.lockPrice(line, p, select.value === "direct")) {
-      v = HQ.ppRules.refreshLine(line, p);
-    }
-    // Bắt buộc hỏi NCC (đổi mã) hoặc bắt buộc gửi thẳng (SL 0): khoá lựa chọn kia.
+    rowEl.dataset.priceLocked = def.priceLocked ? "1" : "";
+    // Bắt buộc hỏi NCC (đổi mã / đổi giá mà cài đặt cấm gửi thẳng) hoặc bắt buộc gửi thẳng (SL 0): khoá lựa chọn kia.
     select.querySelector('option[value="direct"]').disabled = def.disabled && def.checked;
     select.querySelector('option[value="vendor"]').disabled = def.disabled && !def.checked;
     box.querySelector("[data-ppb-outcome]").textContent = HQ.ppRules.outcome(p, p.form_product || {}, v.qty, swap) +
-      HQ.ppRules.vatOutcome(p, v.rate, select.value === "vendor", v.price) + HQ.ppRules.lockNote(line);
+      HQ.ppRules.vatOutcome(p, v.rate, select.value === "vendor", v.price) +
+      (def.priceLocked ? HQ.ppRules.BLOCK_NOTE : "");
     return v.qty >= 0 && !(v.qty < EPS && swap);
   }
 
@@ -123,6 +120,14 @@ window.HlvQuote = window.HlvQuote || {};
     var ok = rows.map(refreshRow).every(Boolean);
     var count = rows.filter(function (r) { return r.querySelector("[data-ppb-action]").value !== SKIP; }).length;
     el("send").disabled = !ok || !count;
+    // Chọn chung "Gửi thẳng" mà có món đổi giá bị cài đặt bắt hỏi NCC: nói rõ để khỏi tưởng đã gửi thẳng hết.
+    var all = el("body").querySelector("[data-ppb-all]");
+    var locked = rows.filter(function (r) { return r.dataset.priceLocked; }).length;
+    var note = el("body").querySelector("[data-ppb-all-note]");
+    if (note) {
+      note.textContent = all.value === "direct" && locked
+        ? locked + " món có giá khác giá cũ nên vẫn hỏi lại NCC (cài đặt: đổi giá thì phải hỏi NCC)." : "";
+    }
     el("send").textContent = "Gửi " + count + " món";
   }
 
@@ -150,7 +155,8 @@ window.HlvQuote = window.HlvQuote || {};
     }
     return '<label class="hq-ppb-all"><span>Tất cả các món</span><select class="hq-input" data-ppb-all>' +
       '<option value="">Chọn từng món</option><option value="vendor">Hỏi lại NCC</option>' +
-      '<option value="direct">Gửi thẳng thu mua duyệt (không hỏi NCC)</option></select></label>';
+      '<option value="direct">Gửi thẳng thu mua duyệt (không hỏi NCC)</option></select>' +
+      '<span class="hq-pp-diff" data-ppb-all-note></span></label>';
   }
 
   /** Áp việc chung cho mọi món có việc đó; món bắt buộc khác (đổi mã → hỏi NCC, SL 0 → gửi thẳng) refreshRow sửa lại. */
