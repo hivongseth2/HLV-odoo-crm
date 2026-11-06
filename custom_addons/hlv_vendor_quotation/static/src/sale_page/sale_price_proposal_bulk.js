@@ -99,17 +99,22 @@ window.HlvQuote = window.HlvQuote || {};
     if (!REQUOTE[select.value]) {
       return true;
     }
-    var v = HQ.ppRules.refreshLine(box.querySelector("[data-pp-line]"), p);
+    var line = box.querySelector("[data-pp-line]");
+    var v = HQ.ppRules.refreshLine(line, p);
     var swap = swapped(p);
     var def = HQ.ppRules.vendorDefault(p, v.qty, v.rate, v.price, swap);
     if (def.disabled || !select.dataset.touched) {
       select.value = def.checked ? "vendor" : "direct";
     }
-    // Bắt buộc hỏi NCC (đổi mã / cài đặt cấm gửi thẳng đổi giá) hoặc bắt buộc gửi thẳng (SL 0): khoá lựa chọn kia.
+    // Cài đặt cấm gửi thẳng đổi giá: gửi thẳng thì ô giá khoá về giá cũ.
+    if (HQ.ppRules.lockPrice(line, p, select.value === "direct")) {
+      v = HQ.ppRules.refreshLine(line, p);
+    }
+    // Bắt buộc hỏi NCC (đổi mã) hoặc bắt buộc gửi thẳng (SL 0): khoá lựa chọn kia.
     select.querySelector('option[value="direct"]').disabled = def.disabled && def.checked;
     select.querySelector('option[value="vendor"]').disabled = def.disabled && !def.checked;
     box.querySelector("[data-ppb-outcome]").textContent = HQ.ppRules.outcome(p, p.form_product || {}, v.qty, swap) +
-      HQ.ppRules.vatOutcome(p, v.rate, select.value === "vendor", v.price);
+      HQ.ppRules.vatOutcome(p, v.rate, select.value === "vendor", v.price) + HQ.ppRules.lockNote(line);
     return v.qty >= 0 && !(v.qty < EPS && swap);
   }
 

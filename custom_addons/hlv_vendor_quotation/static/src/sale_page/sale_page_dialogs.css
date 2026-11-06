@@ -565,6 +565,7 @@
 .hq-pp-diff { color: var(--hq-warn-ink); font-weight: 700; }
 .hq-pp-old { color: var(--hq-muted); }
 .hq-pp-field.is-changed .hq-pp-old { color: var(--hq-warn-ink); font-weight: 700; }
+.hq-pp-line .hq-input[readonly] { background: var(--hq-bg); color: var(--hq-muted); cursor: not-allowed; }
 .hq-pp-field { display: grid; gap: .2rem; min-width: 0; }
 .hq-pp-check { display: flex; align-items: center; gap: .4rem; font-size: .875rem; }
 .hq-pp-outcome { font-size: .8125rem; color: var(--hq-warn-ink); }
