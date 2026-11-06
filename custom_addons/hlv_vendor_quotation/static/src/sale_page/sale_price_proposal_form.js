@@ -219,13 +219,10 @@ window.HlvQuote = window.HlvQuote || {};
     return { checked: !(directOnly && !changed), disabled: false };
   }
 
-  // Cài đặt "Đổi giá thì phải hỏi NCC": nói vì sao không gửi thẳng được.
-  var BLOCK_NOTE = " Đổi giá thì phải hỏi NCC (cài đặt) — muốn gửi thẳng thu mua thì xoá ô giá.";
-
   // Popup xử lý nhiều món (sale_price_proposal_bulk.js) dùng đúng các quy tắc này.
   HQ.ppRules = {
     outcome: outcome, vatOutcome: vatOutcome, vendorDefault: vendorDefault, lineFields: lineFields,
-    refreshLine: refreshLine, bindLine: bindLine, BLOCK_NOTE: BLOCK_NOTE,
+    refreshLine: refreshLine, bindLine: bindLine,
   };
 
   function body(p) {
@@ -256,8 +253,7 @@ window.HlvQuote = window.HlvQuote || {};
     if (def.disabled || !F.touched) {
       vendor.checked = def.checked;
     }
-    el("outcome").textContent = outcome(p, product, v.qty, swapped) + vatOutcome(p, v.rate, vendor.checked, v.price) +
-      (def.priceLocked ? BLOCK_NOTE : "");
+    el("outcome").textContent = outcome(p, product, v.qty, swapped) + vatOutcome(p, v.rate, vendor.checked, v.price);
     el("send").textContent = vendor.checked ? "Gửi NCC báo giá" : "Gửi thu mua duyệt";
     el("send").disabled = !(v.qty >= 0) || (v.qty < EPS && swapped);
     el("note").placeholder = vendor.checked

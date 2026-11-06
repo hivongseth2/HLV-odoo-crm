@@ -106,12 +106,14 @@ window.HlvQuote = window.HlvQuote || {};
       select.value = def.checked ? "vendor" : "direct";
     }
     rowEl.dataset.priceLocked = def.priceLocked ? "1" : "";
-    // Bắt buộc hỏi NCC (đổi mã / đổi giá mà cài đặt cấm gửi thẳng) hoặc bắt buộc gửi thẳng (SL 0): khoá lựa chọn kia.
-    select.querySelector('option[value="direct"]').disabled = def.disabled && def.checked;
+    // Bắt buộc hỏi NCC (đổi mã) hoặc bắt buộc gửi thẳng (SL 0): khoá lựa chọn kia. Đổi giá mà cài đặt cấm gửi thẳng:
+    // ẩn hẳn "Gửi thẳng" (xoá ô giá / về giá cũ thì hiện lại).
+    var direct = select.querySelector('option[value="direct"]');
+    direct.disabled = def.disabled && def.checked;
+    direct.hidden = !!def.priceLocked;
     select.querySelector('option[value="vendor"]').disabled = def.disabled && !def.checked;
     box.querySelector("[data-ppb-outcome]").textContent = HQ.ppRules.outcome(p, p.form_product || {}, v.qty, swap) +
-      HQ.ppRules.vatOutcome(p, v.rate, select.value === "vendor", v.price) +
-      (def.priceLocked ? HQ.ppRules.BLOCK_NOTE : "");
+      HQ.ppRules.vatOutcome(p, v.rate, select.value === "vendor", v.price);
     return v.qty >= 0 && !(v.qty < EPS && swap);
   }
 
@@ -120,13 +122,14 @@ window.HlvQuote = window.HlvQuote || {};
     var ok = rows.map(refreshRow).every(Boolean);
     var count = rows.filter(function (r) { return r.querySelector("[data-ppb-action]").value !== SKIP; }).length;
     el("send").disabled = !ok || !count;
-    // Chọn chung "Gửi thẳng" mà có món đổi giá bị cài đặt bắt hỏi NCC: nói rõ để khỏi tưởng đã gửi thẳng hết.
+    // Có món đổi giá mà cài đặt cấm gửi thẳng: tắt "Gửi thẳng" ở ô chọn chung (không áp được cho mọi món).
     var all = el("body").querySelector("[data-ppb-all]");
-    var locked = rows.filter(function (r) { return r.dataset.priceLocked; }).length;
-    var note = el("body").querySelector("[data-ppb-all-note]");
-    if (note) {
-      note.textContent = all.value === "direct" && locked
-        ? locked + " món có giá khác giá cũ nên vẫn hỏi lại NCC (cài đặt: đổi giá thì phải hỏi NCC)." : "";
+    if (all) {
+      var allDirect = all.querySelector('option[value="direct"]');
+      allDirect.disabled = rows.some(function (r) { return r.dataset.priceLocked; });
+      if (allDirect.disabled && all.value === "direct") {
+        all.value = "";
+      }
     }
     el("send").textContent = "Gửi " + count + " món";
   }
@@ -155,8 +158,7 @@ window.HlvQuote = window.HlvQuote || {};
     }
     return '<label class="hq-ppb-all"><span>Tất cả các món</span><select class="hq-input" data-ppb-all>' +
       '<option value="">Chọn từng món</option><option value="vendor">Hỏi lại NCC</option>' +
-      '<option value="direct">Gửi thẳng thu mua duyệt (không hỏi NCC)</option></select>' +
-      '<span class="hq-pp-diff" data-ppb-all-note></span></label>';
+      '<option value="direct">Gửi thẳng thu mua duyệt (không hỏi NCC)</option></select></label>';
   }
 
   /** Áp việc chung cho mọi món có việc đó; món bắt buộc khác (đổi mã → hỏi NCC, SL 0 → gửi thẳng) refreshRow sửa lại. */
