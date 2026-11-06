@@ -94,7 +94,7 @@ def voucher_payment_entries(voucher, lines):
     ]
 
 
-def reusable_voucher_states(vouchers, stored_totals, tolerance):
+def reusable_voucher_states(vouchers, stored_totals, tolerance, stored_dates=None):
     """Tra lại 1 hóa đơn đã gắn dòng từ trước: có dùng lại được các dòng đã lưu, chỉ cập nhật
     đã thu / chưa thu, khỏi đọc lại chi tiết từng chứng từ không?
 
@@ -106,6 +106,8 @@ def reusable_voucher_states(vouchers, stored_totals, tolerance):
     Nhận: vouchers — kết quả tìm chứng từ (dòng thô sa_voucher_get); stored_totals —
     {refid chứng từ: tổng tiền đã lưu}; tolerance — sai số tiền. Trả {refid: paid_state} nếu
     dùng lại được, None nếu phải đọc lại toàn bộ. vouchers hoặc stored_totals rỗng trả None.
+    stored_dates — {refid: ngày hóa đơn đã lưu}, tùy chọn: kế toán đổi ngày hóa đơn trên MISA mà
+    tổng tiền không đổi thì ngày lệch → trả None để tính lại ngày hóa đơn và hạn thu.
     """
     if not vouchers or not stored_totals:
         return None
@@ -116,6 +118,8 @@ def reusable_voucher_states(vouchers, stored_totals, tolerance):
     for voucher in vouchers:
         refid = voucher.get('refid')
         if abs((voucher.get('total_amount') or 0.0) - (stored_totals[refid] or 0.0)) > tolerance:
+            return None
+        if stored_dates is not None and parse_misa_date(voucher.get('inv_date')) != stored_dates.get(refid):
             return None
         states[refid] = paid_state_of(voucher.get('paid_type'))[0]
     return states

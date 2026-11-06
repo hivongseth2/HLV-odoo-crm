@@ -64,6 +64,7 @@ class StockPickingMisaPayment(models.Model):
             stored = self.env['misa.sale.payment.line'].sudo().search([('invoice_no', '=', invoice_no)])
             states = reusable_voucher_states(
                 vouchers, {line.voucher_refid: line.voucher_total for line in stored}, MISA_INVOICE_AMOUNT_TOLERANCE,
+                stored_dates={line.voucher_refid: line.invoice_date or None for line in stored},
             )
             if states:
                 return self._misa_payment_update_states(invoice_no, pickings, stored, states, now)
@@ -97,6 +98,11 @@ class StockPickingMisaPayment(models.Model):
         """Đường tắt khi tra lại: chỉ ghi đã thu / chưa thu mới lên các dòng đã lưu, theo chứng từ."""
         for refid, state in states.items():
             stored.filtered(lambda line: line.voucher_refid == refid and line.paid_state != state).write({'paid_state': state})
+        # Điều khoản thanh toán của đơn/khách có thể đổi sau lần lưu — tính lại hạn thu theo điều khoản hiện tại.
+        for line in stored:
+            due_date, due_source = self._misa_payment_due_date(line.sale_line_id.order_id, line.invoice_date)
+            if (line.due_date or False) != due_date or line.due_source != due_source:
+                line.write({'due_date': due_date, 'due_source': due_source})
         done = all(state == 'paid' for state in states.values())
         pickings.write({'misa_payment_checked_at': checked_at, 'misa_payment_done': done})
         return {
