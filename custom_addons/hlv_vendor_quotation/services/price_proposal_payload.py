@@ -102,6 +102,8 @@ def _proposal(proposal):
         "form_product": _product(proposal.new_product_id or proposal.suggested_product_id or proposal.product_id),
         "change_text": proposal._change_text() if proposal._has_line_change() else "",
         "needs_vendor": proposal.needs_vendor,
+        # Gửi thẳng mà đổi giá: "apply" áp giá sale nhập / "block" bắt hỏi NCC (popup khoá "gửi thẳng").
+        "direct_price_mode": proposal._direct_price_mode(),
         # VAT: mã thu mua đề xuất / sale chốt (rỗng = giữ VAT trên đơn); form điền sẵn cái sale chốt, chưa có thì của thu
         # mua, chưa có nữa thì VAT đang trên đơn.
         "suggested_vat": proposal.suggested_vat or "",

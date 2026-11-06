@@ -105,8 +105,11 @@ window.HlvQuote = window.HlvQuote || {};
     if (def.disabled || !select.dataset.touched) {
       select.value = def.checked ? "vendor" : "direct";
     }
+    // Bắt buộc hỏi NCC (đổi mã / cài đặt cấm gửi thẳng đổi giá) hoặc bắt buộc gửi thẳng (SL 0): khoá lựa chọn kia.
+    select.querySelector('option[value="direct"]').disabled = def.disabled && def.checked;
+    select.querySelector('option[value="vendor"]').disabled = def.disabled && !def.checked;
     box.querySelector("[data-ppb-outcome]").textContent = HQ.ppRules.outcome(p, p.form_product || {}, v.qty, swap) +
-      HQ.ppRules.vatOutcome(p, v.rate, select.value === "vendor");
+      HQ.ppRules.vatOutcome(p, v.rate, select.value === "vendor", v.price);
     return v.qty >= 0 && !(v.qty < EPS && swap);
   }
 

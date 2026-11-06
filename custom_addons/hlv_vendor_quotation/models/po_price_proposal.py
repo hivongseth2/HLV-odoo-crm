@@ -35,6 +35,10 @@ REQUOTE_FROM = ("sale", "quoted", "rejected")
 # Đề xuất đang chờ SALE làm (hỏi lại NCC / gửi thu mua duyệt) — bộ lọc "Thu mua trả về giá" trên trang hỏi giá.
 SALE_TODO_STATES = ("sale", "quoted", "rejected")
 KEEP_FROM = ("sale", "vendor", "quoted", "rejected")
+# Sale gửi thẳng thu mua (không hỏi NCC) mà giá khác giá trên đơn: "apply" = duyệt thì áp giá sale nhập (sale đã chốt
+# với NCC ngoài hệ thống / theo gợi ý thu mua — thu mua vẫn duyệt); "block" = đổi giá thì phải hỏi NCC báo.
+DIRECT_PRICE_PARAM = "hlv_vendor_quotation.direct_price"
+DIRECT_PRICE_MODES = [("apply", "Áp giá sale nhập"), ("block", "Đổi giá thì phải hỏi NCC")]
 
 
 class PurchaseOrderPriceProposal(models.Model):
@@ -199,15 +203,7 @@ class PurchaseOrderPriceProposal(models.Model):
         note = (note or "").strip()
         # Không mua nữa: không có gì cho NCC báo giá — gửi thẳng thu mua (NCC được báo khi duyệt).
         if (not needs_vendor or self.new_drop) and not self._product_changed():
-            if not self._has_line_change():
-                raise UserError(_("Không đổi số lượng / mã / VAT thì phải hỏi NCC giá mới (hoặc bấm \"NCC giữ giá\")."))
-            self._close_requote()
-            self.sudo().write({"needs_vendor": False, "vendor_price_incl": 0.0, "vendor_date": False})
-            new_incl = self.old_price_incl
-            if self._vat_changed():
-                unit = self.order_line_id.sudo().price_unit
-                new_incl = price_incl_vat(unit, vat_rate(self.new_vat))
-            self._submit(new_incl, note, self.new_vat)
+            self._send_direct(price_incl, note)
             return
         quote_line = self._prepare_target_quote_line()
         if not quote_line:
@@ -222,6 +218,28 @@ class PurchaseOrderPriceProposal(models.Model):
                   sale_code=self.inquiry_id.sale_code or "")
         self._post_order(Markup(_("Sale (%(user)s) đã hỏi lại NCC %(product)s%(change)s.")) % dict(
             self._texts(), user=self.env.user.name))
+
+    @api.model
+    def _direct_price_mode(self):
+        """Cài đặt DIRECT_PRICE_PARAM: "apply" (mặc định) / "block"."""
+        mode = self.env["ir.config_parameter"].sudo().get_param(DIRECT_PRICE_PARAM)
+        return mode if mode in dict(DIRECT_PRICE_MODES) else "apply"
+
+    def _send_direct(self, price_incl, note):
+        """Gửi thẳng thu mua duyệt, không hỏi NCC. Giá sau VAT sẽ áp: price_incl khi sale nhập giá khác giá trên đơn
+        (cài đặt "apply" — "block" thì báo lỗi, phải hỏi NCC); không thì giữ giá chưa VAT (đổi VAT → giá sau VAT đổi
+        theo). Không đổi giá / SL / mã / VAT thì không có gì để duyệt → lỗi."""
+        price_changed = bool(price_incl) and not same_money(price_incl, self.old_price_incl)
+        if price_changed and self._direct_price_mode() == "block":
+            raise UserError(_("Đổi giá thì phải hỏi NCC báo giá (Cài đặt: gửi thẳng thu mua không được đổi giá)."))
+        if not price_changed and not self._has_line_change():
+            raise UserError(_("Không đổi giá / số lượng / mã / VAT thì phải hỏi NCC giá mới (hoặc bấm \"NCC giữ giá\")."))
+        self._close_requote()
+        self.sudo().write({"needs_vendor": False, "vendor_price_incl": 0.0, "vendor_date": False})
+        new_incl = price_incl if price_changed else self.old_price_incl
+        if not price_changed and self._vat_changed():
+            new_incl = price_incl_vat(self.order_line_id.sudo().price_unit, vat_rate(self.new_vat))
+        self._submit(new_incl, note, self.new_vat)
 
     def _vendor_request_text(self, price_incl, note):
         """Tin gửi NCC: soạn sẵn theo mã / SL sẽ mua / giá mong muốn, cộng lời của sale."""

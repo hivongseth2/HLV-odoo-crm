@@ -22,7 +22,7 @@ from .price_proposal_utils import same_money, vat_code, vat_label, vat_rate
 from .purchase_order_line_price import PRICE_WRITE_CTX
 from .purchase_order_revision import tax_rate_of
 from .vendor_quote_line import VAT_SELECTION
-from .vendor_quote_utils import format_vn_number, split_unit_price
+from .vendor_quote_utils import format_vn_number, price_incl_vat, split_unit_price
 
 QTY_EPS = 1e-6
 
@@ -196,9 +196,9 @@ class PriceProposalLineChange(models.Model):
             if self.apply_vat != "kct" and not taxes:
                 raise UserError(_("Công ty chưa khai thuế mua %s — không đổi VAT dòng đơn được.", vat_label(self.apply_vat)))
         new_unit = line.price_unit
-        # Không hỏi NCC: giữ giá chưa VAT (đổi VAT thì giá sau VAT đổi theo). Hỏi NCC: giá chưa VAT tính từ giá sau VAT
-        # NCC báo theo VAT sẽ áp — đúng số NCC xuất hoá đơn.
-        if self.needs_vendor and (taxes is not None or not same_money(self.new_price_incl, self.old_price_incl)):
+        # Giá sau VAT gửi duyệt (NCC báo, hoặc sale nhập khi gửi thẳng — _send_direct) khác giá đang có tính theo VAT sẽ
+        # áp → giá chưa VAT tính lại từ đó (đúng số NCC xuất hoá đơn). Bằng nhau (chỉ đổi SL / VAT) → giữ giá chưa VAT.
+        if not same_money(self.new_price_incl, price_incl_vat(line.price_unit, new_tax)):
             new_unit = split_unit_price(self.new_price_incl, new_tax)[0] or line.price_unit
         return new_unit, taxes
 

@@ -10,6 +10,7 @@ from .vendor_inquiry_crm_order import SALE_ORDER_SOURCE_PARAM, SALE_ORDER_SOURCE
 from .vendor_quote import VENDOR_LATE_EDIT_PARAM
 from .vendor_quote_access import REQUIRE_PASSWORD_PARAM
 from .vendor_quote_line_choice import REQUEST_PRICE_FOLLOW_PARAM
+from .po_price_proposal import DIRECT_PRICE_MODES, DIRECT_PRICE_PARAM
 
 # Đuôi tên ô tick → state của purchase.order (VENDOR_ORDER_STATES).
 STATE_SUFFIXES = {"draft": "draft", "sent": "sent", "to_approve": "to approve", "purchase": "purchase", "done": "done"}
@@ -46,6 +47,12 @@ class ResConfigSettings(models.TransientModel):
         string="NCC sửa giá món đã lên YCMH",
         default="warn",
         config_parameter=REQUEST_PRICE_FOLLOW_PARAM,
+    )
+    hlv_vq_direct_price = fields.Selection(
+        DIRECT_PRICE_MODES,
+        string="Gửi thẳng thu mua mà có đổi giá",
+        default="apply",
+        config_parameter=DIRECT_PRICE_PARAM,
     )
     hlv_vq_sale_order_source = fields.Selection(
         SALE_ORDER_SOURCES,
