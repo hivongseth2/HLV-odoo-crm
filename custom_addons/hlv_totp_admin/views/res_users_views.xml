@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Form user (admin mở): nút của core chỉ còn nhóm Admin bảo mật 2FA thấy, thêm nút cấp / xem khoá. -->
+    <record id="view_totp_form_admin_managed" model="ir.ui.view">
+        <field name="name">user form: 2FA do admin giữ</field>
+        <field name="model">res.users</field>
+        <field name="inherit_id" ref="auth_totp.view_totp_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//button[@name='action_totp_enable_wizard']" position="attributes">
+                <attribute name="groups">hlv_totp_admin.group_totp_admin</attribute>
+            </xpath>
+            <xpath expr="//button[@name='action_totp_disable']" position="attributes">
+                <attribute name="groups">hlv_totp_admin.group_totp_admin</attribute>
+            </xpath>
+            <xpath expr="//button[@name='action_totp_disable']" position="after">
+                <button name="action_totp_admin_show" type="object" groups="hlv_totp_admin.group_totp_admin"
+                        invisible="not totp_enabled" string="Xem khoá 2FA" class="btn btn-secondary ms-3"/>
+                <button name="action_totp_admin_issue" type="object" groups="hlv_totp_admin.group_totp_admin"
+                        invisible="totp_enabled or not id or id == uid" string="Cấp 2FA" class="btn btn-secondary ms-3"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Preferences (nhân viên tự mở): bỏ nút bật / tắt, chỉ admin còn thấy. -->
+    <record id="view_totp_field_admin_managed" model="ir.ui.view">
+        <field name="name">users preference: 2FA do admin giữ</field>
+        <field name="model">res.users</field>
+        <field name="inherit_id" ref="auth_totp.view_totp_field"/>
+        <field name="arch" type="xml">
+            <xpath expr="//button[@name='action_totp_enable_wizard']" position="attributes">
+                <attribute name="groups">hlv_totp_admin.group_totp_admin</attribute>
+            </xpath>
+            <xpath expr="//button[@name='action_totp_disable']" position="attributes">
+                <attribute name="groups">hlv_totp_admin.group_totp_admin</attribute>
+            </xpath>
+        </field>
+    </record>
+</odoo>
