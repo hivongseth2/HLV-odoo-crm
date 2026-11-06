@@ -1,7 +1,8 @@
 /* Popup "Xử lý tất cả" các món thu mua trả về của phiếu (sale_price_proposal.js): mỗi món một hàng, điền sẵn như popup
    một món (sale_price_proposal_form.js — dùng chung quy tắc HQ.ppRules): NCC đã báo mới → gửi thu mua duyệt; chưa báo
    → "Hỏi lại NCC" hoặc "Gửi thẳng thu mua duyệt" (không hỏi NCC) với SL, giá trước / sau VAT, VAT — chọn sẵn theo
-   ppRules.vendorDefault và tự đổi theo cái sale sửa cho tới khi sale tự chọn; NCC giữ nguyên giá → giữ giá.
+   ppRules.vendorDefault và tự đổi theo cái sale sửa cho tới khi sale tự chọn (từng món, hoặc ô "Tất cả các món" ở
+   đầu popup); NCC giữ nguyên giá → giữ giá.
    Sale sửa hàng nào cần rồi bấm gửi MỘT lần (API price_bulk — một món lỗi thì không món nào được ghi). Đổi sang mã khác
    mã thu mua đề xuất thì dùng nút "Hỏi lại NCC" trên ô (popup một món có ô tìm mã). Khung popup: #hq-ppb-modal. */
 window.HlvQuote = window.HlvQuote || {};
@@ -134,11 +135,35 @@ window.HlvQuote = window.HlvQuote || {};
     return data;
   }
 
+  /** Ô chọn chung đầu popup — chỉ khi có món hỏi lại / gửi thẳng được. */
+  function allSelect(list) {
+    if (!list.some(function (p) { return p.can_requote; })) {
+      return "";
+    }
+    return '<label class="hq-ppb-all"><span>Tất cả các món</span><select class="hq-input" data-ppb-all>' +
+      '<option value="">Chọn từng món</option><option value="vendor">Hỏi lại NCC</option>' +
+      '<option value="direct">Gửi thẳng thu mua duyệt (không hỏi NCC)</option></select></label>';
+  }
+
+  /** Áp việc chung cho mọi món có việc đó; món bắt buộc khác (đổi mã → hỏi NCC, SL 0 → gửi thẳng) refreshRow sửa lại. */
+  function applyAll(value) {
+    if (!value) {
+      return;
+    }
+    el("body").querySelectorAll("[data-ppb-action]").forEach(function (select) {
+      if (select.querySelector('option[value="' + value + '"]')) {
+        select.value = value;
+        select.dataset.touched = "1";
+      }
+    });
+    refreshAll();
+  }
+
   function open(list) {
     B.byId = {};
     list.forEach(function (p) { B.byId[p.id] = p; });
     el("title").textContent = "Thu mua trả về " + list.length + " món";
-    el("body").innerHTML = list.map(row).join("");
+    el("body").innerHTML = allSelect(list) + list.map(row).join("");
     refreshAll();
     HQ.show("hq-ppb-modal", true);
   }
@@ -155,6 +180,7 @@ window.HlvQuote = window.HlvQuote || {};
     });
     HQ.on(modal, "click", "[data-ppb-close]", close);
     HQ.ppRules.bindLine(modal, refreshAll);
+    HQ.on(modal, "change", "[data-ppb-all]", function (select) { applyAll(select.value); });
     HQ.on(modal, "change", "[data-ppb-action]", function (select) {
       select.dataset.touched = "1";  // sale tự chọn việc — thôi tự đổi hỏi NCC / gửi thẳng
       refreshAll();

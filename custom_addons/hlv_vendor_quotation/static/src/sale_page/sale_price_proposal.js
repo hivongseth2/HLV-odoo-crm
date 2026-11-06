@@ -75,8 +75,7 @@ window.HlvQuote = window.HlvQuote || {};
     return '<div class="hq-todo" role="status"><div><b>Thu mua trả về ' + todo.length + " món</b>" +
       "<span>" + (submit ? "NCC đã báo lại — gửi thu mua duyệt" : "Hỏi lại NCC / gửi thu mua") +
       " ngay trên ô tô cam ở bảng So giá, hoặc xử lý tất cả một lần</span></div>" +
-      '<div class="hq-pp-actions"><button type="button" class="hq-btn" data-pp-jump="1">Đến ô cần làm</button>' +
-      '<button type="button" class="hq-btn hq-btn-primary" data-ppb-open="1">Xử lý tất cả</button></div></div>';
+      '<button type="button" class="hq-btn hq-btn-primary" data-ppb-open="1">Xử lý tất cả</button></div>';
   }
 
   /** Đề xuất đã xong: một dòng kết quả. */
@@ -266,15 +265,6 @@ window.HlvQuote = window.HlvQuote || {};
     HQ.bindProposalBulkEvents(panel);
     HQ.on(panel, "click", "[data-pp-detail]", function (el) {
       panel.querySelector('[data-pp-steps="' + el.dataset.ppDetail + '"]').classList.toggle("hq-hidden");
-    });
-    HQ.on(panel, "click", "[data-pp-jump]", function () {
-      var cell = panel.querySelector(".hq-offer.has-proposal");
-      if (cell) {
-        cell.scrollIntoView({ behavior: "smooth", block: "center" });
-        cell.classList.remove("is-flash");
-        void cell.offsetWidth;  // vẽ lại để bấm lần nữa vẫn nháy
-        cell.classList.add("is-flash");
-      }
     });
     HQ.on(panel, "click", "[data-pp-submit]", function (el) {
       var note = ask("Gửi thu mua duyệt giá NCC báo lại — ghi chú cho thu mua (không bắt buộc):");
