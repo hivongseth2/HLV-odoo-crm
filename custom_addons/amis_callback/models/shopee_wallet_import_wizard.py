@@ -7,6 +7,8 @@ from io import BytesIO
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
+from .shopee_wallet_utils import is_order_revenue_row, wallet_column_indexes
+
 try:
     import openpyxl
     from openpyxl import Workbook
@@ -145,18 +147,30 @@ class ShopeeWalletImportWizard(models.TransientModel):
         return 17  # fallback: row 18 (0-based = 17)
 
     def _extract_shopee_codes(self, rows):
-        """Trích xuất list mã đơn Shopee duy nhất từ cột D (index 3)."""
+        """Trích xuất mã đơn Shopee của các dòng doanh thu đơn hàng thực thu.
+
+        Chỉ lấy dòng có Loại giao dịch = "Doanh thu đơn hàng", Dòng tiền =
+        "Tiền vào" và Số tiền > 0; các dòng hoàn tiền, phí, rút tiền... không
+        được lập phiếu bán hàng. Trả về (list mã duy nhất, số dòng đã bỏ qua).
+        """
         header_idx = self._find_header_row_idx(rows)
+        indexes = wallet_column_indexes(rows[header_idx] if header_idx < len(rows) else [])
+        code_idx = indexes['order_code']
         codes = []
         seen = set()
+        skipped = 0
         for row in rows[header_idx + 1:]:
-            if len(row) <= 3:
+            row = list(row)
+            code = str(row[code_idx] or '').strip() if code_idx < len(row) else ''
+            if not code or code.lower() in ('none', '-', 'nan'):
                 continue
-            code = str(row[3] or '').strip()
-            if code and code.lower() not in ('', 'none', '-', 'nan') and code not in seen:
+            if not is_order_revenue_row(row, indexes):
+                skipped += 1
+                continue
+            if code not in seen:
                 codes.append(code)
                 seen.add(code)
-        return codes
+        return codes, skipped
 
     def _get_customer_map(self):
         """
@@ -508,19 +522,22 @@ class ShopeeWalletImportWizard(models.TransientModel):
     def action_export(self):
         self.ensure_one()
         rows = self._read_shopee_file()
-        shopee_codes = self._extract_shopee_codes(rows)
+        shopee_codes, skipped_rows = self._extract_shopee_codes(rows)
 
         if not shopee_codes:
-            raise UserError('Không tìm thấy mã đơn hàng Shopee nào trong file.\n'
-                            'Kiểm tra lại file: cột D từ row 19 phải chứa mã đơn Shopee.')
+            raise UserError(
+                'Không tìm thấy dòng doanh thu đơn hàng nào trong file.\n'
+                'Chỉ lấy dòng có Loại giao dịch = "Doanh thu đơn hàng", '
+                'Dòng tiền = "Tiền vào" và Số tiền > 0.'
+            )
 
         code_so_map = self._find_sale_orders(shopee_codes)
         found = sum(1 for v in code_so_map.values() if v)
         not_found = [c for c, v in code_so_map.items() if not v]
 
         _logger.info(
-            'Shopee wallet import: %d codes, %d found, %d not found',
-            len(shopee_codes), found, len(not_found),
+            'Shopee wallet import: %d codes, %d found, %d not found, %d rows skipped',
+            len(shopee_codes), found, len(not_found), skipped_rows,
         )
         if not_found:
             _logger.warning('Không tìm thấy SO cho: %s', ', '.join(not_found[:20]))
@@ -532,6 +549,8 @@ class ShopeeWalletImportWizard(models.TransientModel):
         excel_data = self._generate_excel(misa_rows)
 
         summary = 'Tìm thấy %d/%d đơn hàng.' % (found, len(shopee_codes))
+        if skipped_rows:
+            summary += '\nBỏ qua %d dòng không phải doanh thu đơn hàng tiền vào.' % skipped_rows
         if not_found:
             summary += '\nKhông tìm thấy (%d): %s%s' % (
                 len(not_found),
